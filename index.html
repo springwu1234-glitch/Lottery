@@ -1,28 +1,24 @@
+在程式碼裡加入「抽中後是否移除」的開關，完整更新版如下：
+
+```html
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>幸運抽獎機</title>
-
-<!-- PWA 設定 -->
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="抽獎機">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#302b63">
-
-<!-- App 圖示（用 emoji 產生，不需要圖片檔） -->
 <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23302b63'/><text y='.9em' font-size='75' x='10'>🎰</text></svg>">
-
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body {
-  min-height: 100vh;
-  min-height: -webkit-fill-available;
+  min-height: 100vh; min-height: -webkit-fill-available;
   background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
-  font-family: sans-serif;
-  color: #fff;
+  font-family: sans-serif; color: #fff;
   padding: 20px 16px;
   padding-top: env(safe-area-inset-top, 20px);
   padding-bottom: env(safe-area-inset-bottom, 20px);
@@ -35,6 +31,365 @@ canvas { position: fixed; top: 0; left: 0; pointer-events: none; z-index: 9999; 
   font-size: 32px; font-weight: 900;
   background: linear-gradient(90deg, #FFD93D, #FF6B6B, #6BCB77, #4D96FF);
   -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+}
+.header p { color: rgba(255,255,255,.5); font-size: 13px; margin-top: 6px; }
+.winner-box {
+  display: none; background: rgba(255,217,61,.12);
+  border: 2px solid #FFD93D; border-radius: 16px;
+  padding: 22px; text-align: center; margin-bottom: 20px;
+  animation: pop .4s ease forwards;
+}
+.winner-box.show { display: block; }
+.winner-label { font-size: 12px; color: #FFD93D; letter-spacing: 3px; font-weight: 700; margin-bottom: 8px; }
+.winner-name { font-size: 42px; font-weight: 900; color: #FFD93D; text-shadow: 0 0 30px rgba(255,217,61,.5); }
+.spin-box { display: none; text-align: center; margin-bottom: 16px; }
+.spin-box.show { display: block; }
+.spinner {
+  width: 52px; height: 52px;
+  border: 4px solid rgba(255,255,255,.2);
+  border-top: 4px solid #FFD93D;
+  border-radius: 50%; margin: 0 auto;
+  animation: sp .4s linear infinite;
+}
+.card {
+  background: rgba(255,255,255,.07);
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 14px; padding: 16px; margin-bottom: 14px;
+}
+.card-title { font-size: 12px; color: rgba(255,255,255,.5); letter-spacing: 2px; margin-bottom: 12px; }
+input[type=text] {
+  width: 100%; background: rgba(255,255,255,.1);
+  border: 1px solid rgba(255,255,255,.15);
+  border-radius: 8px; color: #fff;
+  padding: 10px 12px; font-size: 14px;
+  outline: none; font-family: inherit;
+}
+input[type=text]::placeholder { color: rgba(255,255,255,.3); }
+.row { display: flex; gap: 8px; margin-top: 10px; }
+.btn {
+  border: none; cursor: pointer; font-family: inherit;
+  font-weight: 700; border-radius: 9px;
+  padding: 11px; font-size: 14px; transition: all .2s;
+}
+.btn:hover { transform: translateY(-2px); filter: brightness(1.1); }
+.btn:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+.btn-add { background: linear-gradient(135deg,#6BCB77,#4D96FF); color: #fff; flex: 1; }
+.btn-draw {
+  background: linear-gradient(135deg,#FFD93D,#FF6B6B);
+  color: #1a1a2e; flex: 2; font-size: 15px; font-weight: 900;
+  animation: glow 1.8s infinite;
+}
+.btn-draw:disabled { animation: none; }
+.count { font-size: 12px; color: rgba(255,255,255,.35); text-align: center; margin-top: 10px; }
+.count .warn { color: #FF6B6B; }
+
+/* 開關樣式 */
+.toggle-row {
+  display: flex; align-items: center; justify-content: space-between;
+  background: rgba(255,255,255,.07);
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 14px; padding: 14px 16px; margin-bottom: 14px;
+}
+.toggle-label { font-size: 14px; color: rgba(255,255,255,.85); }
+.toggle-label small { display: block; font-size: 11px; color: rgba(255,255,255,.4); margin-top: 2px; }
+.switch { position: relative; width: 48px; height: 26px; flex-shrink: 0; }
+.switch input { opacity: 0; width: 0; height: 0; }
+.slider {
+  position: absolute; inset: 0;
+  background: rgba(255,255,255,.2);
+  border-radius: 26px; cursor: pointer;
+  transition: .3s;
+}
+.slider:before {
+  content: ""; position: absolute;
+  width: 20px; height: 20px; left: 3px; top: 3px;
+  background: #fff; border-radius: 50%;
+  transition: .3s;
+}
+.switch input:checked + .slider { background: #FF6B6B; }
+.switch input:checked + .slider:before { transform: translateX(22px); }
+
+.item {
+  display: flex; align-items: center; gap: 8px;
+  background: rgba(255,255,255,.05);
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 9px; padding: 8px 10px;
+  margin-bottom: 7px; transition: all .15s;
+}
+.item.hi { background: rgba(255,255,255,.13); }
+.item.used {
+  opacity: .4;
+  text-decoration: line-through;
+  background: rgba(255,255,255,.02);
+}
+.dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.item span { flex: 1; font-size: 14px; }
+.item input {
+  flex: 1; background: transparent; border: none;
+  outline: none; color: #fff; font-size: 14px; font-family: inherit;
+}
+.ibtn { background: none; border: none; cursor: pointer; padding: 0 3px; font-size: 14px; }
+.idel { color: rgba(255,100,100,.7); font-size: 18px; }
+.btn-clear {
+  width: 100%; margin-top: 6px; padding: 8px;
+  background: rgba(255,80,80,.12); color: rgba(255,100,100,.8);
+  border: 1px solid rgba(255,100,100,.2);
+  border-radius: 8px; cursor: pointer; font-family: inherit; font-size: 12px;
+}
+@keyframes pop { 0%{transform:scale(.6);opacity:0} 70%{transform:scale(1.1)} 100%{transform:scale(1);opacity:1} }
+@keyframes sp { to{transform:rotate(360deg)} }
+@keyframes glow { 0%,100%{box-shadow:0 0 0 0 rgba(255,217,61,.6)} 50%{box-shadow:0 0 0 10px rgba(255,217,61,0)} }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="wrap">
+  <div class="header">
+    <div style="font-size:40px">🎰</div>
+    <h1>幸運抽獎機</h1>
+    <p>輸入選項，按下抽獎，見證奇蹟！</p>
+  </div>
+
+  <div class="winner-box" id="wb">
+    <div class="winner-label">🎉 恭喜獲獎 🎉</div>
+    <div class="winner-name" id="wn"></div>
+    <button class="btn" onclick="clearW()" style="margin-top:14px;background:rgba(255,255,255,.1);color:#fff;padding:7px 18px;border-radius:20px;font-size:13px">清除結果</button>
+  </div>
+
+  <div class="spin-box" id="sb">
+    <div class="spinner"></div>
+    <div style="margin-top:8px;color:rgba(255,255,255,.6);font-size:13px">抽獎中...</div>
+  </div>
+
+  <!-- 移除開關 -->
+  <div class="toggle-row">
+    <div class="toggle-label">
+      抽中後移除選項
+      <small id="toggleHint">目前：抽中後保留，可重複抽</small>
+    </div>
+    <label class="switch">
+      <input type="checkbox" id="removeToggle" onchange="updateToggleHint()">
+      <span class="slider"></span>
+    </label>
+  </div>
+
+  <div class="card">
+    <div class="card-title">＋ 新增選項</div>
+    <input type="text" id="inp" placeholder="輸入名稱（逗號分隔可一次多筆）" onkeydown="if(event.key==='Enter')addItem()">
+    <div class="row">
+      <button class="btn btn-add" onclick="addItem()">新增</button>
+      <button class="btn btn-draw" id="db" onclick="startDraw()">🎲 開始抽獎！</button>
+    </div>
+    <div class="count" id="ct"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">📋 選項列表</div>
+    <div id="list"></div>
+    <button class="btn-clear" id="clrBtn" onclick="clearAll()">清空全部</button>
+  </div>
+</div>
+
+<script>
+const COLORS = ["#FF6B6B","#FFD93D","#6BCB77","#4D96FF","#FF6FC8","#FF9A3C","#A855F7","#06B6D4"];
+let items = ["選項一","選項二","選項三","選項四"];
+let usedIdx = new Set(); // 記錄已抽中的索引
+let spinning = false, hi = -1, wiIdx = -1, editIdx = -1;
+
+function updateToggleHint() {
+  const on = document.getElementById("removeToggle").checked;
+  document.getElementById("toggleHint").textContent =
+    on ? "目前：抽中後自動移除" : "目前：抽中後保留，可重複抽";
+}
+
+function availableItems() {
+  const removeOn = document.getElementById("removeToggle").checked;
+  if (removeOn) return items.map((v,i)=>i).filter(i=>!usedIdx.has(i));
+  return items.map((_,i)=>i);
+}
+
+let actx;
+function getCtx() {
+  if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+  return actx;
+}
+function playTick(pitch=1) {
+  const ac=getCtx(), o=ac.createOscillator(), g=ac.createGain();
+  o.connect(g); g.connect(ac.destination);
+  o.type="square"; o.frequency.value=300+pitch*400;
+  g.gain.setValueAtTime(0.18,ac.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001,ac.currentTime+0.07);
+  o.start(); o.stop(ac.currentTime+0.07);
+}
+function playWin() {
+  const ac=getCtx();
+  const notes=[523,659,784,1047,784,1047,1319];
+  const times=[0,.12,.24,.36,.52,.62,.72];
+  notes.forEach((freq,i)=>{
+    const o=ac.createOscillator(), g=ac.createGain();
+    o.connect(g); g.connect(ac.destination);
+    o.type=i<4?"sine":"triangle"; o.frequency.value=freq;
+    const t=ac.currentTime+times[i];
+    g.gain.setValueAtTime(0,t);
+    g.gain.linearRampToValueAtTime(0.25,t+.03);
+    g.gain.exponentialRampToValueAtTime(0.001,t+.25);
+    o.start(t); o.stop(t+.3);
+  });
+}
+
+function render() {
+  const list=document.getElementById("list");
+  const db=document.getElementById("db");
+  const ct=document.getElementById("ct");
+  const clr=document.getElementById("clrBtn");
+  const removeOn=document.getElementById("removeToggle").checked;
+  const avail=availableItems();
+
+  list.innerHTML="";
+  if (!items.length) {
+    list.innerHTML='<div style="color:rgba(255,255,255,.25);text-align:center;padding:12px;font-size:13px">尚無選項</div>';
+  } else {
+    items.forEach((item,i)=>{
+      const c=COLORS[i%COLORS.length];
+      const isUsed=usedIdx.has(i);
+      const d=document.createElement("div");
+      d.className="item"+(hi===i?" hi":"")+(isUsed?" used":"");
+      d.style.borderColor=hi===i?c:"rgba(255,255,255,.08)";
+      if (wiIdx===i&&!spinning) d.style.boxShadow=`0 0 16px ${c}99`;
+      d.innerHTML=`<div class="dot" style="background:${c}"></div>`;
+      if (editIdx===i) {
+        const inp=document.createElement("input");
+        inp.value=item;
+        inp.onblur=()=>saveEdit(i,inp.value);
+        inp.onkeydown=e=>{if(e.key==="Enter")saveEdit(i,inp.value);};
+        d.appendChild(inp);
+        setTimeout(()=>inp.focus(),0);
+      } else {
+        const s=document.createElement("span");
+        s.textContent=item+(isUsed?" ✓":"");
+        s.ondblclick=()=>{editIdx=i;render();};
+        d.appendChild(s);
+      }
+      const btns=document.createElement("div");
+      btns.innerHTML=`<button class="ibtn" onclick="startEdit(${i})">✏️</button>
+                      <button class="ibtn idel" onclick="removeItem(${i})">×</button>`;
+      d.appendChild(btns);
+      list.appendChild(d);
+    });
+  }
+
+  const remainCount=avail.length;
+  ct.innerHTML=`共 ${items.length} 個選項`+
+    (removeOn&&usedIdx.size>0?`，剩餘 <b style="color:#6BCB77">${remainCount}</b> 個可抽`:"")+
+    (remainCount<2?` <span class="warn">（可抽選項不足 2 個）</span>`:"");
+  db.disabled=spinning||remainCount<2;
+  clr.style.display=items.length?"block":"none";
+}
+
+function addItem() {
+  const inp=document.getElementById("inp");
+  const ns=inp.value.split(/[,，\n]/).map(s=>s.trim()).filter(Boolean);
+  if(!ns.length) return;
+  items=[...items,...ns]; inp.value=""; render();
+}
+function removeItem(i) {
+  items.splice(i,1); usedIdx.delete(i);
+  const newUsed=new Set();
+  usedIdx.forEach(u=>{ if(u<i) newUsed.add(u); else if(u>i) newUsed.add(u-1); });
+  usedIdx=newUsed;
+  if(wiIdx===i) wiIdx=-1;
+  else if(wiIdx>i) wiIdx--;
+  hi=-1; render();
+}
+function startEdit(i) { editIdx=i; render(); }
+function saveEdit(i,val) {
+  if(val.trim()) items[i]=val.trim();
+  editIdx=-1; render();
+}
+function clearAll() {
+  items=[]; usedIdx=new Set(); wiIdx=-1; hi=-1;
+  document.getElementById("wb").classList.remove("show"); render();
+}
+function clearW() {
+  wiIdx=-1; hi=-1;
+  document.getElementById("wb").classList.remove("show"); render();
+}
+
+function startDraw() {
+  const avail=availableItems();
+  if(spinning||avail.length<2) return;
+  spinning=true; wiIdx=-1;
+  document.getElementById("wb").classList.remove("show");
+  document.getElementById("sb").classList.add("show");
+  let count=0, delay=60;
+  const total=18+Math.floor(Math.random()*12);
+  const spin=()=>{
+    hi=avail[Math.floor(Math.random()*avail.length)];
+    render();
+    playTick(1-count/total);
+    count++;
+    if(count<total){
+      if(count>total*0.6) delay=Math.min(delay+18,300);
+      setTimeout(spin,delay);
+    } else {
+      const f=avail[Math.floor(Math.random()*avail.length)];
+      hi=f; wiIdx=f; spinning=false;
+      const removeOn=document.getElementById("removeToggle").checked;
+      if(removeOn) {
+        usedIdx.add(f);
+        // 延遲 1.5 秒後從列表移除，讓使用者看清楚得獎者
+        setTimeout(()=>{
+          removeItem(f);
+          wiIdx=-1;
+        }, 1500);
+      }
+      document.getElementById("sb").classList.remove("show");
+      document.getElementById("wn").textContent=items[f];
+      document.getElementById("wb").classList.add("show");
+      render(); playWin(); launchConfetti();
+    }
+  };
+  spin();
+}
+
+function launchConfetti() {
+  const canvas=document.getElementById("c");
+  const ctx2=canvas.getContext("2d");
+  canvas.width=window.innerWidth; canvas.height=window.innerHeight;
+  let pieces=Array.from({length:100},()=>({
+    x:Math.random()*canvas.width, y:-20,
+    w:Math.random()*10+5, h:Math.random()*6+3,
+    color:COLORS[Math.floor(Math.random()*COLORS.length)],
+    vx:(Math.random()-.5)*4, vy:Math.random()*4+2,
+    angle:Math.random()*Math.PI*2, va:(Math.random()-.5)*.2
+  }));
+  const draw=()=>{
+    ctx2.clearRect(0,0,canvas.width,canvas.height);
+    pieces.forEach(p=>{
+      ctx2.save(); ctx2.translate(p.x,p.y); ctx2.rotate(p.angle);
+      ctx2.fillStyle=p.color; ctx2.fillRect(-p.w/2,-p.h/2,p.w,p.h);
+      ctx2.restore();
+      p.x+=p.vx; p.y+=p.vy; p.angle+=p.va; p.vy+=.05;
+    });
+    pieces=pieces.filter(p=>p.y<canvas.height+20);
+    if(pieces.length) requestAnimationFrame(draw);
+    else ctx2.clearRect(0,0,canvas.width,canvas.height);
+  };
+  requestAnimationFrame(draw);
+}
+
+render();
+</script>
+</body>
+</html>
+```
+
+新增的功能：
+
+- **開關預設關閉** — 抽中後保留，可以重複抽同一個人
+- **開關打開** — 抽中後該選項會標記 ✓ 並在 1.5 秒後自動移除，讓你看清楚得獎者再消失
+- **剩餘數量提示** — 開啟移除模式時，會顯示「剩餘 N 個可抽」
+- **全部抽完時** — 按鈕自動變灰無法再抽  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
 }
 .header p { color: rgba(255,255,255,.5); font-size: 13px; margin-top: 6px; }
 .winner-box {
